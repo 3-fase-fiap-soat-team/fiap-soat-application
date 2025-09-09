@@ -1,0 +1,284 @@
+import { Injectable } from '@nestjs/common';
+
+export interface MercadoPagoQRResponse {
+  qr_data: string;
+  in_store_order_id: string;
+}
+
+export interface CreateQRCodeRequest {
+  orderId: string;
+  amount: number;
+  title: string;
+  description: string;
+}
+
+@Injectable()
+export class MercadoPagoService {
+  private readonly accessToken: string;
+  private readonly baseUrl = 'https://api.mercadopago.com';
+
+  constructor() {
+    // Em produção, isso viria de variáveis de ambiente
+    const env = (globalThis as any).process?.env || {};
+    this.accessToken = env.MERCADOPAGO_ACCESS_TOKEN || 'TEST-ACCESS-TOKEN';
+  }
+
+  async createQRCode(request: CreateQRCodeRequest): Promise<MercadoPagoQRResponse> {
+    try {
+      // Para ambiente de desenvolvimento/testes, vamos simular uma resposta válida do MP
+      // Em produção, isso seria uma chamada real à API do Mercado Pago
+      
+      const env = (globalThis as any).process?.env || {};
+      if (env.NODE_ENV === 'production') {
+        return await this.createRealQRCode(request);
+      } else {
+        return await this.createMockQRCode(request);
+      }
+    } catch (error) {
+      console.error('Erro ao criar QR code no Mercado Pago:', error);
+      throw new Error('Falha na geração do QR code de pagamento');
+    }
+  }
+
+  private async createRealQRCode(request: CreateQRCodeRequest): Promise<MercadoPagoQRResponse> {
+    // Implementação real da API do Mercado Pago
+    const env = (globalThis as any).process?.env || {};
+    
+    const payload = {
+      cash_out: {
+        amount: request.amount
+      },
+      description: request.description,
+      external_reference: request.orderId,
+      items: [
+        {
+          sku_number: request.orderId,
+          category: "marketplace",
+          title: request.title,
+          description: request.description,
+          unit_price: request.amount,
+          quantity: 1,
+          unit_measure: "unit",
+          total_amount: request.amount
+        }
+      ],
+      notification_url: `${env.WEBHOOK_BASE_URL}/webhook/mercadopago`,
+      sponsor: {
+        id: parseInt(env.MERCADOPAGO_USER_ID || '0')
+      }
+    };
+
+    const response = await fetch(`${this.baseUrl}/instore/orders/qr/seller/collectors/${env.MERCADOPAGO_USER_ID}/pos/${env.MERCADOPAGO_POS_ID}/qrs`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${this.accessToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (!response.ok) {
+      throw new Error(`Mercado Pago API error: ${response.status}`);
+    }
+
+    return await response.json();
+  }
+
+  private async createMockQRCode(request: CreateQRCodeRequest): Promise<MercadoPagoQRResponse> {
+    // Gerar QR code real do Mercado Pago para desenvolvimento
+    // Usar o formato correto de Point of Sale (POS) do MP
+    
+    const qrCodeData = await this.generateMercadoPagoQRCode(request);
+    
+    const mockResponse: MercadoPagoQRResponse = {
+      qr_data: qrCodeData,
+      in_store_order_id: request.orderId
+    };
+
+    // Simular delay da API
+    await new Promise(resolve => setTimeout(resolve, 500));
+
+    console.log(`QR Code do Mercado Pago gerado para pedido ${request.orderId}`);
+    console.log(`QR Data: ${qrCodeData}`);
+    
+    return mockResponse;
+  }
+
+  private async generateMercadoPagoQRCode(request: CreateQRCodeRequest): Promise<string> {
+    // Para desenvolvimento, vamos usar o endpoint público do MP para gerar QR codes válidos
+    // Este é o método correto para gerar QR codes que funcionam no app do MP
+    
+    try {
+      const env = (globalThis as any).process?.env || {};
+      
+      // Payload para gerar QR code dinâmico do Mercado Pago
+      const payload = {
+        description: request.description,
+        external_reference: request.orderId,
+        items: [
+          {
+            title: request.title,
+            description: request.description,
+            quantity: 1,
+            currency_id: "BRL",
+            unit_price: request.amount
+          }
+        ],
+        notification_url: `${env.WEBHOOK_BASE_URL || 'https://webhook.site/test'}/webhook/mercadopago`,
+        back_urls: {
+          success: `${env.WEBHOOK_BASE_URL || 'https://webhook.site/test'}/payment/success`,
+          failure: `${env.WEBHOOK_BASE_URL || 'https://webhook.site/test'}/payment/failure`,
+          pending: `${env.WEBHOOK_BASE_URL || 'https://webhook.site/test'}/payment/pending`
+        },
+        auto_return: "approved",
+        payment_methods: {
+          excluded_payment_types: [
+            { id: "credit_card" },
+            { id: "debit_card" },
+            { id: "ticket" }
+          ],
+          installments: 1
+        }
+      };
+
+      // Para desenvolvimento, usar endpoint de sandbox
+      const apiUrl = env.NODE_ENV === 'production' 
+        ? 'https://api.mercadopago.com/checkout/preferences'
+        : 'https://api.mercadopago.com/checkout/preferences';
+
+      const response = await fetch(apiUrl, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(payload)
+      });
+
+      if (!response.ok) {
+        console.error('Erro na API do Mercado Pago:', response.status, await response.text());
+        // Fallback para QR code PIX simples em caso de erro
+        return this.generateSimplePIXQRCode(request);
+      }
+
+      const preferenceData = await response.json();
+      
+      // O QR code será a sandbox_init_point ou init_point
+      const qrUrl = env.NODE_ENV === 'production' 
+        ? preferenceData.init_point 
+        : preferenceData.sandbox_init_point;
+
+      // Converter URL para QR code data
+      return this.urlToQRCode(qrUrl);
+
+    } catch (error) {
+      console.error('Erro ao gerar QR code do Mercado Pago:', error);
+      // Fallback para QR code PIX
+      return this.generateSimplePIXQRCode(request);
+    }
+  }
+
+  private generateSimplePIXQRCode(request: CreateQRCodeRequest): string {
+    // QR code PIX básico como fallback
+    const pixKey = 'contato@techlanchonete.com.br'; // Chave PIX da loja
+    const amount = request.amount.toFixed(2);
+    const description = request.description.substring(0, 25);
+    
+    // Formato EMV padrão para PIX
+    return [
+      '00020101', // Payload Format Indicator
+      '021243650016', // Point of Initiation Method
+      `COM.MERCADOLIBRE0201`, // Merchant Account Information
+      `3063${request.orderId}`, // Merchant Account Information
+      '52040000', // Merchant Category Code
+      '53039865', // Transaction Currency (BRL)
+      `54${String(amount).padStart(2, '0')}`, // Transaction Amount
+      '5802BR', // Country Code
+      '5909Tech Loja', // Merchant Name
+      '6009SAO PAULO', // Merchant City
+      '62070503***', // Additional Data Field
+      '6304' // CRC16
+    ].join('') + this.calculateCRC16([
+      '00020101',
+      '021243650016',
+      'COM.MERCADOLIBRE0201',
+      `3063${request.orderId}`,
+      '52040000',
+      '53039865',
+      `54${String(amount).padStart(2, '0')}`,
+      '5802BR',
+      '5909Tech Loja',
+      '6009SAO PAULO',
+      '62070503***',
+      '6304'
+    ].join(''));
+  }
+
+  private urlToQRCode(url: string): string {
+    // Para desenvolvimento, retornar a URL como QR code data
+    // Em produção, isso seria convertido para formato binário QR
+    return url;
+  }
+
+  private calculateCRC16(data: string): string {
+    // Implementação do CRC16 para PIX
+    const polynomial = 0x1021;
+    let crc = 0xFFFF;
+    
+    for (let i = 0; i < data.length; i++) {
+      crc ^= (data.charCodeAt(i) << 8);
+      for (let j = 0; j < 8; j++) {
+        if (crc & 0x8000) {
+          crc = (crc << 1) ^ polynomial;
+        } else {
+          crc <<= 1;
+        }
+        crc &= 0xFFFF;
+      }
+    }
+    
+    return crc.toString(16).toUpperCase().padStart(4, '0');
+  }
+
+  private calculateChecksum(data: string): string {
+    // Algoritmo simplificado de checksum para o QR code PIX
+    // Em produção, usar biblioteca específica para PIX/Mercado Pago
+    let sum = 0;
+    for (let i = 0; i < data.length; i++) {
+      sum += data.charCodeAt(i);
+    }
+    return (sum % 10000).toString().padStart(4, '0');
+  }
+
+  async getPaymentInfo(paymentId: string) {
+    // Em produção, consultar a API do MP para verificar status do pagamento
+    if ((globalThis as any).process?.env?.NODE_ENV === 'production') {
+      const response = await fetch(`${this.baseUrl}/v1/payments/${paymentId}`, {
+        headers: {
+          'Authorization': `Bearer ${this.accessToken}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Failed to get payment info: ${response.status}`);
+      }
+
+      return await response.json();
+    } else {
+      // Mock para desenvolvimento - simular dados realistas
+      // Extrair orderId do paymentId para demo
+      const orderId = paymentId.includes('_') ? paymentId.split('_')[1] : 'default-order-id';
+      
+      return {
+        id: paymentId,
+        status: 'approved',
+        status_detail: 'accredited',
+        external_reference: orderId, // Este é o ID do pedido
+        transaction_amount: 50.00,
+        date_approved: new Date().toISOString(),
+        payment_method_id: 'pix',
+        payment_type_id: 'bank_transfer'
+      };
+    }
+  }
+}

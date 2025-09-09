@@ -1,0 +1,8 @@
+version: "3"
+agent:
+    authtoken: 2rOsKAXwHxSjOPyo5wjxbboIEBe_oF9UAb6bK4WaBf6y16jV
+tunnels:
+  api:
+    proto: http
+    addr: api-dev:3000 
+    domain: frank-raptor-vastly.ngrok-free.app

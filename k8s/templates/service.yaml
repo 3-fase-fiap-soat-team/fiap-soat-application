@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "soat-tech-challenge.fullname" . }}
+  labels:
+    {{- include "soat-tech-challenge.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.service.type }}
+  ports:
+    - port: {{ .Values.service.port }}
+      targetPort: http
+      protocol: TCP
+      name: http
+  selector:
+    {{- include "soat-tech-challenge.selectorLabels" . | nindent 4 }}

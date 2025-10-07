@@ -1,8 +1,384 @@
-# Grupo 271 - Desafio SOAT Tech
+# 🚀 SOAT Tech Challenge - Cloud-Native Application
 
-## Sobre o Projeto
+Sistema de autoatendimento para lanchonete em expansão, desenvolvido com **Clean Architecture** e deployment **100% cloud-native** (EKS + RDS).
 
-Este projeto é um sistema de autoatendimento para uma lanchonete em expansão, desenvolvido como parte do Tech Challenge da SOAT. O sistema visa resolver os desafios de gestão de pedidos e atendimento ao cliente, oferecendo uma solução completa para autoatendimento e gerenciamento de pedidos.
+---
+
+## 👥 Integrantes
+- **Juan Pablo Neres de Lima** (RM361411) - Discord: juanjohnny
+- **Rafael Petherson Sampaio** (RM364885) - Discord: tupanrps7477
+- **Gustavo Silva Chaves Do Nascimento** (RM361477) - Discord: gustavosilva2673
+
+---
+
+## 🎯 Sobre o Projeto
+
+Sistema completo de gestão de pedidos com:
+- ✅ **Autoatendimento** via API REST
+- ✅ **Pagamento integrado** (Mercado Pago via QR Code)
+- ✅ **Gestão de pedidos** em tempo real
+- ✅ **Autenticação serverless** (AWS Lambda + Cognito)
+- ✅ **Arquitetura Limpa** (Clean Architecture + CQRS)
+- ✅ **Deploy cloud-native** (Kubernetes EKS + PostgreSQL RDS)
+
+---
+
+## 🏗️ Arquitetura Cloud-Native
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                        AWS CLOUD                            │
+├─────────────────────────────────────────────────────────────┤
+│                                                             │
+│  ┌──────────────┐      ┌─────────────────────────────┐    │
+│  │  API Gateway │──────▶│  Lambda (Auth/Signup)      │    │
+│  │  REST API    │      │  Node.js 20.x              │    │
+│  └──────────────┘      └─────────────────────────────┘    │
+│         │                           │                       │
+│         │                           ▼                       │
+│         │                  ┌──────────────────┐            │
+│         │                  │  Cognito User Pool│            │
+│         │                  │  (custom:cpf)     │            │
+│         │                  └──────────────────┘            │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌──────────────────────────────────────────────┐         │
+│  │  Network Load Balancer (NLB)                 │         │
+│  │  ade6621a32ddf...elb.us-east-1.amazonaws.com │         │
+│  └──────────────────────────────────────────────┘         │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │  EKS Cluster (fiap-soat-eks-dev)                   │  │
+│  │  Kubernetes 1.30 | 2x t3.micro nodes               │  │
+│  │                                                     │  │
+│  │  ┌────────────────────────────────────────────┐   │  │
+│  │  │  Namespace: fiap-soat-app                  │   │  │
+│  │  │  ┌──────────────────────────────────────┐  │   │  │
+│  │  │  │  Deployment: fiap-soat-application   │  │   │  │
+│  │  │  │  Image: NestJS (ECR)                 │  │   │  │
+│  │  │  │  Replicas: 1                         │  │   │  │
+│  │  │  │  Port: 3000                          │  │   │  │
+│  │  │  └──────────────────────────────────────┘  │   │  │
+│  │  └────────────────────────────────────────────┘   │  │
+│  └─────────────────────────────────────────────────────┘  │
+│         │                                                   │
+│         ▼                                                   │
+│  ┌─────────────────────────────────────────────────────┐  │
+│  │  RDS PostgreSQL (fiap-soat-db)                      │  │
+│  │  PostgreSQL 17.4 | db.t3.micro                      │  │
+│  │  Endpoint: fiap-soat-db.cfcimi4ia52v...amazonaws.com│  │
+│  └─────────────────────────────────────────────────────┘  │
+│                                                             │
+└─────────────────────────────────────────────────────────────┘
+```
+
+---
+
+## 🚀 Deploy e Execução
+
+### ⚠️ **Importante**: Esta aplicação é **cloud-only**
+
+Não há suporte para desenvolvimento local. Todo o ambiente roda em **AWS (EKS + RDS + Lambda)**.
+
+### Pré-requisitos
+
+- ✅ **EKS Cluster** configurado ([repo EKS](https://github.com/3-fase-fiap-soat-team/fiap-soat-k8s-terraform))
+- ✅ **RDS PostgreSQL** provisionado ([repo RDS](https://github.com/3-fase-fiap-soat-team/fiap-soat-database-terraform))
+- ✅ **Lambda + Cognito** deployado ([repo Lambda](https://github.com/3-fase-fiap-soat-team/fiap-soat-lambda))
+- ✅ **AWS CLI** configurado
+- ✅ **kubectl** instalado e configurado
+- ✅ **Docker** instalado
+
+### 1️⃣ Build e Push da Imagem
+
+```bash
+# Build da imagem Docker
+docker build -t fiap-soat-application:latest .
+
+# Tag para ECR
+aws ecr get-login-password --region us-east-1 | docker login --username AWS --password-stdin <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com
+docker tag fiap-soat-application:latest <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/fiap-soat-application:latest
+
+# Push para ECR
+docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/fiap-soat-application:latest
+```
+
+### 2️⃣ Deploy no Kubernetes
+
+```bash
+# Aplicar manifests (do repositório EKS)
+cd ../fiap-soat-k8s-terraform
+kubectl apply -f manifests/namespace.yaml
+kubectl apply -f manifests/secret.yaml
+kubectl apply -f manifests/configmap.yaml
+kubectl apply -f manifests/deployment.yaml
+kubectl apply -f manifests/service.yaml
+
+# Verificar deployment
+kubectl get all -n fiap-soat-app
+kubectl logs -f deployment/fiap-soat-application -n fiap-soat-app
+```
+
+### 3️⃣ Rodar Migrações
+
+```bash
+# Conectar ao pod
+kubectl exec -it deployment/fiap-soat-application -n fiap-soat-app -- /bin/sh
+
+# Rodar migrações
+npm run migration:up
+```
+
+### 4️⃣ Verificar Health
+
+```bash
+# Obter Load Balancer URL
+kubectl get svc -n fiap-soat-app
+
+# Testar endpoints
+curl http://<LOAD_BALANCER_URL>/health
+curl http://<LOAD_BALANCER_URL>/docs  # Swagger
+curl http://<LOAD_BALANCER_URL>/products
+```
+
+---
+
+## 📂 Arquitetura Limpa (Clean Architecture)
+
+Estrutura de camadas bem definidas:
+
+```
+src/
+├── core/                    # 🔴 DOMAIN + APPLICATION LAYER
+│   ├── categories/          # Domínio: Categorias
+│   │   ├── entities/        # Entidades de negócio
+│   │   ├── operation/
+│   │   │   ├── gateways/    # Interfaces (portas)
+│   │   │   ├── presenters/  # Transformadores
+│   │   │   └── controllers/ # Controllers de domínio
+│   │   └── usecases/        # Casos de uso (CQRS)
+│   │       ├── commands/    # Operações de escrita
+│   │       └── queries/     # Operações de leitura
+│   ├── customers/           # Domínio: Clientes
+│   ├── orders/              # Domínio: Pedidos
+│   ├── products/            # Domínio: Produtos
+│   └── common/              # Compartilhado
+│       ├── dtos/
+│       └── exceptions/
+│
+├── external/                # 🟢 INFRASTRUCTURE + INTERFACE LAYER
+│   ├── api/                 # Controllers NestJS (HTTP)
+│   │   ├── controllers/
+│   │   └── dtos/
+│   ├── database/            # Persistência (TypeORM)
+│   │   ├── entities/
+│   │   └── repositories/
+│   ├── gateways/            # Integrações externas
+│   │   └── mercadopago/
+│   └── providers/           # Serviços externos
+│
+├── config/                  # Configurações
+│   └── database.config.ts   # Config cloud-native
+├── app.module.ts            # Módulo principal
+└── main.ts                  # Entrypoint + validação
+```
+
+### Princípios Aplicados
+
+1. ✅ **Separação de Camadas**: Domínio isolado da infraestrutura
+2. ✅ **CQRS**: Commands (escrita) e Queries (leitura) separados
+3. ✅ **Dependency Inversion**: Domínio define interfaces, infraestrutura implementa
+4. ✅ **Use Cases**: Lógica de negócio orquestrada por casos de uso
+5. ✅ **Testabilidade**: Domínio testável sem dependências externas
+
+---
+
+## 🔐 Autenticação Serverless
+
+### Lambda + Cognito
+
+```bash
+# Signup (criar cliente + user Cognito)
+curl -X POST https://nlxpeaq6w0.execute-api.us-east-1.amazonaws.com/dev/signup \
+  -H "Content-Type: application/json" \
+  -d '{
+    "cpf": "12345678900",
+    "name": "João Silva",
+    "email": "joao@example.com"
+  }'
+
+# Auth (validar CPF + retornar JWT)
+curl -X GET https://nlxpeaq6w0.execute-api.us-east-1.amazonaws.com/dev/auth/12345678900
+```
+
+### Fluxo de Autenticação
+
+1. **Signup**: Lambda → NestJS (criar customer) → Cognito (criar user) → JWT
+2. **Auth**: Lambda → NestJS (buscar customer) → Cognito (validar) → JWT
+3. **Protected Routes**: Validar JWT no NestJS (middleware/guard)
+
+---
+
+## 🗄️ Banco de Dados
+
+### Variáveis de Ambiente Obrigatórias
+
+```bash
+# .env.rds (Kubernetes Secret)
+DATABASE_HOST=fiap-soat-db.cfcimi4ia52v.us-east-1.rds.amazonaws.com
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgresadmin
+DATABASE_PASSWORD=SuperSecret123!
+DATABASE_NAME=fiapdb_dev
+DATABASE_SSL=true
+NODE_ENV=production
+```
+
+### Migrações TypeORM
+
+```bash
+# Criar nova migração
+npm run migration:create -- -n NomeDaMigracao
+
+# Executar migrações
+npm run migration:up
+
+# Reverter migração
+npm run migration:down
+```
+
+---
+
+## 📊 Endpoints Principais
+
+### Health Checks
+- `GET /health` - Status da aplicação
+- `GET /health/database` - Conectividade RDS
+
+### Documentação
+- `GET /docs` - Swagger UI
+
+### Categorias
+- `GET /categories` - Listar categorias
+- `POST /categories` - Criar categoria
+
+### Produtos
+- `GET /products` - Listar produtos
+- `GET /products/:id` - Buscar produto
+- `POST /products` - Criar produto
+- `PATCH /products/:id` - Atualizar produto
+- `DELETE /products/:id` - Deletar produto
+
+### Clientes
+- `GET /customers` - Listar clientes
+- `GET /customers/:cpf` - Buscar por CPF
+- `POST /customers` - Criar cliente
+
+### Pedidos
+- `GET /orders` - Listar pedidos
+- `POST /orders` - Criar pedido
+- `PATCH /orders/:id/status` - Atualizar status
+- `POST /orders/:id/payment` - Processar pagamento (Mercado Pago)
+
+---
+
+## 🧪 Testes
+
+```bash
+# Unit tests
+npm run test
+
+# E2E tests
+npm run test:e2e
+
+# Coverage
+npm run test:cov
+```
+
+---
+
+## 📚 Links Úteis
+
+- 📦 [Repositório EKS + Kubernetes](https://github.com/3-fase-fiap-soat-team/fiap-soat-k8s-terraform)
+- 🗄️ [Repositório RDS Terraform](https://github.com/3-fase-fiap-soat-team/fiap-soat-database-terraform)
+- ⚡ [Repositório Lambda + Cognito](https://github.com/3-fase-fiap-soat-team/fiap-soat-lambda)
+- 🎨 [Desenho de Fluxo (Miro)](https://miro.com/app/board/uXjVJXtfEMw=/)
+- 🏗️ [Diagrama de Infraestrutura](https://drive.google.com/file/d/12MQ86MMUuziVfoD7i3s9g8UmBE3q78vQ/view)
+- 🎥 [Vídeo de Apresentação](https://www.youtube.com/watch?v=m_8Sd9t2Jm4)
+
+---
+
+## 💰 Custos AWS
+
+| Recurso | Especificação | Custo Mensal |
+|---------|---------------|--------------|
+| EKS Control Plane | 1 cluster | $75.00 |
+| EC2 (Nodes) | 2x t3.micro | ~$15.00 |
+| RDS PostgreSQL | db.t3.micro | ~$15.50 |
+| Load Balancer | NLB | ~$22.00 |
+| Lambda | 128MB, 30s timeout | ~$0.20 |
+| Cognito | User Pool | Grátis |
+| ECR | Storage | ~$0.50 |
+| **TOTAL** | | **~$128.20/mês** |
+
+**💡 Nota**: Para AWS Academy ($50 créditos), recomenda-se destruir recursos após apresentação.
+
+---
+
+## 🛠️ Troubleshooting
+
+### Aplicação não conecta ao RDS
+```bash
+# Verificar secret
+kubectl get secret fiap-soat-secrets -n fiap-soat-app -o yaml
+
+# Verificar logs
+kubectl logs -f deployment/fiap-soat-application -n fiap-soat-app
+
+# Testar conectividade DNS
+kubectl exec -it deployment/fiap-soat-application -n fiap-soat-app -- nslookup fiap-soat-db.cfcimi4ia52v.us-east-1.rds.amazonaws.com
+```
+
+### Load Balancer não responde
+```bash
+# Verificar status do service
+kubectl describe svc fiap-soat-service -n fiap-soat-app
+
+# Verificar target groups na AWS Console
+aws elbv2 describe-target-health --target-group-arn <ARN>
+```
+
+### Validação de variáveis falha
+```bash
+# A aplicação agora valida variáveis na inicialização
+# Erro típico:
+# ❌ Missing required environment variables:
+#    - DATABASE_HOST
+#    - DATABASE_PASSWORD
+
+# Solução: Verificar secret no Kubernetes
+kubectl edit secret fiap-soat-secrets -n fiap-soat-app
+```
+
+---
+
+## 🎓 Observações Acadêmicas
+
+Este projeto demonstra:
+- ✅ **Clean Architecture** completa (4 camadas)
+- ✅ **CQRS Pattern** (Commands + Queries)
+- ✅ **Cloud-Native** (Kubernetes + RDS + Lambda)
+- ✅ **Serverless Auth** (Lambda + Cognito)
+- ✅ **Fail-Fast Validation** (main.ts)
+- ✅ **TypeORM Migrations** (schema versionado)
+- ✅ **Swagger Documentation** (OpenAPI 3.0)
+- ✅ **Payment Gateway Integration** (Mercado Pago)
+
+---
+
+**📅 Última Atualização**: Janeiro 2025  
+**🏆 Tech Challenge FIAP SOAT - Fase 3**
 
 ### Objetivos
 
@@ -75,8 +451,6 @@ O sistema tem como principais objetivos:
 - Docker
 - Docker Compose
 - Make (GNU Make)
-- Kubernetes (para deploy em produção)
-- Helm (para deploy em Kubernetes)
 
 #### Instalação do Make
 
@@ -103,92 +477,63 @@ sudo dnf install make
 choco install make
 ```
 
+### Configuração de Banco de Dados
+
+A aplicação suporta dois modos de execução:
+1. **Desenvolvimento Local** - PostgreSQL via Docker Compose
+2. **AWS RDS** - PostgreSQL gerenciado na nuvem
+
+#### Arquivos de Configuração
+
+- `.env.local` - Desenvolvimento local com PostgreSQL Docker
+- `.env.rds` - Conexão com AWS RDS PostgreSQL
+- `.env.example` - Template com todas as variáveis disponíveis
+
 ### Execução Local (Docker Compose)
 
-1. Copie o arquivo de ambiente de exemplo:
+1. **Desenvolvimento Local (Padrão)**:
 ```bash
-cp .env.example .env
-```
-
-2. Para iniciar a aplicação, use o comando:
-```bash
+# Iniciar com PostgreSQL local
 make init
-```
-Este comando irá:
-- Iniciar os containers Docker
-- Executar as migrações do banco de dados
-- Iniciar a aplicação
-
-3. Acesse a aplicação em:
-```
-http://localhost:3000
+# ou explicitamente
+make init-local
 ```
 
-4. Acesse a documentação Swagger em:
-```
-http://localhost:3000/docs
-```
-
-5. Caso queira criar uma migração, use o comando:
-```
-make migrate-create -- name=nomeDaSuaMigracao
-```
-
-6. Caso queira limpar os containers, use o comando:
+2. **Conexão com AWS RDS**:
 ```bash
+# Configure primeiro o arquivo .env.rds com as credenciais do RDS
+cp .env.example .env.rds
+# Edite .env.rds com o endpoint real do RDS
+
+# Inicie com conexão RDS
+make init-rds
+```
+
+3. **Testar Conexão RDS**:
+```bash
+# Testa conectividade e roda migrações
+make test-rds
+```
+
+#### Comandos Úteis
+
+- **Acessar aplicação**: http://localhost:3000
+- **Swagger/Docs**: http://localhost:3000/docs  
+- **Health Check**: http://localhost:3000/health
+- **Database Health**: http://localhost:3000/health/database
+
+```bash
+# Criar nova migração
+make migrate-create name=nomeDaSuaMigracao
+
+# Limpar containers
 make clean
+
+# Logs da aplicação
+docker compose logs -f api-dev
 ```
 
-### Deploy em Kubernetes
 
-#### Pré-requisitos
-- Cluster Kubernetes configurado
-- Helm instalado
-- kubectl configurado
-
-#### Comandos de Deploy
-
-1. **Preparação do Ambiente**
-```bash
-# Verificar cluster
-kubectl cluster-info
-
-# Criar namespace
-kubectl create namespace fiap
-```
-
-2. **Deploy da Aplicação**
-```bash
-# Instalar com Helm
-helm install soat-tech-challenge ./k8s --namespace fiap --create-namespace
-
-# Verificar status
-kubectl get pods -n fiap
-```
-
-3. **Acessar a Aplicação**
-```bash
-# Port-forward para acesso local
-kubectl port-forward service/soat-tech-challenge 3000:3000 -n fiap
-```
-
-4. **Testes de Carga com Locust**
-```bash
-# Criar namespace para Locust
-kubectl create namespace locust
-
-# Aplicar ConfigMap
-kubectl apply -f load-tests/configmap.yaml
-
-# Instalar Locust
-helm repo add deliveryhero https://charts.deliveryhero.io/
-helm install locust deliveryhero/locust \
-  --namespace locust \
-  --values load-tests/values-locust.yaml
-
-# Acessar interface do Locust
-kubectl port-forward service/locust 8089:8089 -n locust
-```
 
 ## Arquitetura Limpa (Clean Architecture)
 
@@ -346,20 +691,61 @@ Senha: vZuULBwsJJ
 - Cartões de teste disponíveis no ambiente de sandbox do Mercado Pago
 - Recomendado para desenvolvimento e testes
 
-## Testes de Carga
+## Integração AWS RDS
 
-O projeto inclui testes de carga usando Locust para validar a performance da aplicação:
+### Pré-requisitos
 
-### Cenários de Teste
-- **get_categories** (30%) - Buscar categorias
-- **get_products** (30%) - Buscar produtos  
-- **get_customers** (20%) - Buscar clientes
-- **create_order** (10%) - Criar pedidos
-- **health_check** (10%) - Health check
+1. **RDS Provisionado**: O banco RDS PostgreSQL deve estar criado via Terraform
+   - Repositório: [fiap-soat-database-terraform](https://github.com/3-fase-fiap-soat-team/fiap-soat-database-terraform)
+   - Responsável: Dev 1 (MathLuchiari)
 
-### Configuração Recomendada
-- **Usuários simultâneos**: 10-1000
-- **Taxa de spawn**: 5-10 usuários/segundo
-- **Duração**: 1-2 Minutos
+2. **Credenciais AWS**: Configure o AWS CLI ou use variáveis de ambiente
 
-Para mais detalhes sobre os testes de carga, consulte o [README dos testes](./load-tests/README.md).
+### Configuração RDS
+
+```bash
+# 1. Obter endpoint do RDS (após provisionar via Terraform)
+aws rds describe-db-instances --db-instance-identifier fiap-soat-db
+
+# 2. Configurar arquivo .env.rds
+DATABASE_HOST=fiap-soat-db.xxxxxxxxx.us-east-1.rds.amazonaws.com
+DATABASE_PORT=5432
+DATABASE_USERNAME=postgresadmin
+DATABASE_PASSWORD=SuperSecret123!
+DATABASE_NAME=fiapdb_dev
+DATABASE_SSL=true
+```
+
+### Características RDS
+
+- **Instância**: db.t3.micro (Free Tier)
+- **Engine**: PostgreSQL 17.4
+- **Storage**: 20GB GP2
+- **SSL**: Obrigatório para conexões
+- **Backup**: 7 dias de retenção
+- **Multi-AZ**: Desabilitado (economia AWS Academy)
+
+### Troubleshooting
+
+```bash
+# Verificar conectividade
+make test-rds
+
+# Health check detalhado
+curl http://localhost:3000/health/database
+
+# Logs de conexão
+docker compose --profile rds logs api-rds
+
+# Testar SSL
+openssl s_client -connect your-rds-endpoint:5432 -starttls postgres
+```
+
+### Segurança
+
+- ✅ **SSL/TLS obrigatório** para conexões RDS
+- ✅ **VPC isolada** com subnets privadas
+- ✅ **Security Groups** restritivos
+- ✅ **Credenciais via** arquivos .env (desenvolvimento)
+- 🔄 **TODO**: Migrar para AWS Secrets Manager (produção)
+

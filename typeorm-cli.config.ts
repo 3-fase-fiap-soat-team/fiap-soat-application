@@ -12,6 +12,9 @@ export default new DataSource({
   username: process.env.DATABASE_USERNAME || 'postgres',
   password: process.env.DATABASE_PASSWORD || 'postgres',
   database: process.env.DATABASE_NAME || 'postgres',
+  ssl: process.env.DATABASE_SSL === 'true' ? {
+    rejectUnauthorized: false, // Para AWS RDS
+  } : false,
   entities: [],
   migrations: isProduction ? ['dist/migrations/*.js'] : ['migrations/*.ts'],
 });

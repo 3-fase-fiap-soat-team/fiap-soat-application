@@ -22,11 +22,11 @@ export const databaseConfig = registerAs('database', () => {
   }
 
   return {
-    host: process.env.DATABASE_HOST,
-    port: parseInt(process.env.DATABASE_PORT, 10),
-    username: process.env.DATABASE_USERNAME,
-    password: process.env.DATABASE_PASSWORD,
-    name: process.env.DATABASE_NAME,
+    host: process.env.DATABASE_HOST!,
+    port: parseInt(process.env.DATABASE_PORT!, 10),
+    username: process.env.DATABASE_USERNAME!,
+    password: process.env.DATABASE_PASSWORD!,
+    name: process.env.DATABASE_NAME!,
     ssl: process.env.DATABASE_SSL !== 'false', // Default to true for AWS RDS
   };
 });
@@ -56,7 +56,7 @@ export const awsConfig = registerAs('aws', () => ({
 export const getTypeOrmConfig = () => {
   const isProduction = process.env.NODE_ENV === 'production';
   const dbHost = process.env.DATABASE_HOST;
-  const dbPort = parseInt(process.env.DATABASE_PORT, 10);
+  const dbPort = parseInt(process.env.DATABASE_PORT!, 10);
   const dbUsername = process.env.DATABASE_USERNAME;
   const dbPassword = process.env.DATABASE_PASSWORD;
   const dbName = process.env.DATABASE_NAME;

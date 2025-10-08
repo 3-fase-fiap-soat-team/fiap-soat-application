@@ -185,7 +185,7 @@ jobs:
           echo "⏳ Waiting for deployment rollout..."
           kubectl rollout status deployment/${{ env.K8S_DEPLOYMENT }} \
             -n ${{ env.K8S_NAMESPACE }} \
-            --timeout=10m
+            --timeout=5m
 
       - name: Verify Deployment
         run: |

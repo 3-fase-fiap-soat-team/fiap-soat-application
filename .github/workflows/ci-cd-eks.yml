@@ -208,7 +208,7 @@ jobs:
           echo "🏥 Running health check..."
           
           # Obter Load Balancer URL
-          LB_URL=$(kubectl get svc fiap-soat-service -n ${{ env.K8S_NAMESPACE }} \
+          LB_URL=$(kubectl get svc fiap-soat-application-service -n ${{ env.K8S_NAMESPACE }} \
             -o jsonpath='{.status.loadBalancer.ingress[0].hostname}')
           
           if [ -z "$LB_URL" ]; then

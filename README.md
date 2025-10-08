@@ -4,13 +4,6 @@ Sistema de autoatendimento para lanchonete em expansão, desenvolvido com **Clea
 
 ---
 
-## 👥 Integrantes
-- **Juan Pablo Neres de Lima** (RM361411) - Discord: juanjohnny
-- **Rafael Petherson Sampaio** (RM364885) - Discord: tupanrps7477
-- **Gustavo Silva Chaves Do Nascimento** (RM361477) - Discord: gustavosilva2673
-
----
-
 ## 🎯 Sobre o Projeto
 
 Sistema completo de gestão de pedidos com:
@@ -56,9 +49,11 @@ Sistema completo de gestão de pedidos com:
 │  │  │  Namespace: fiap-soat-app                  │   │  │
 │  │  │  ┌──────────────────────────────────────┐  │   │  │
 │  │  │  │  Deployment: fiap-soat-application   │  │   │  │
-│  │  │  │  Image: NestJS (ECR)                 │  │   │  │
-│  │  │  │  Replicas: 1                         │  │   │  │
-│  │  │  │  Port: 3000                          │  │   │  │
+│  │  │  │  - Image: NestJS (ECR)               │  │   │  │
+│  │  │  │  - HPA: 1-3 replicas (auto)          │  │   │  │
+│  │  │  │  - Resources: 512Mi/500m CPU         │  │   │  │
+│  │  │  │  - Health Checks: /health            │  │   │  │
+│  │  │  │  - Port: 3000                        │  │   │  │
 │  │  │  └──────────────────────────────────────┘  │   │  │
 │  │  └────────────────────────────────────────────┘   │  │
 │  └─────────────────────────────────────────────────────┘  │
@@ -109,16 +104,30 @@ docker push <ACCOUNT_ID>.dkr.ecr.us-east-1.amazonaws.com/fiap-soat-application:l
 ```bash
 # Aplicar manifests (do repositório EKS)
 cd ../fiap-soat-k8s-terraform
+
+# Infraestrutura Kubernetes (namespace, configmap, secret, service, HPA)
 kubectl apply -f manifests/namespace.yaml
-kubectl apply -f manifests/secret.yaml
 kubectl apply -f manifests/configmap.yaml
-kubectl apply -f manifests/deployment.yaml
+kubectl apply -f manifests/secret.yaml
 kubectl apply -f manifests/service.yaml
+kubectl apply -f manifests/hpa.yaml
+
+# Deployment da aplicação (neste repositório)
+cd ../fiap-soat-application
+kubectl apply -f k8s/deployment.yaml
 
 # Verificar deployment
 kubectl get all -n fiap-soat-app
 kubectl logs -f deployment/fiap-soat-application -n fiap-soat-app
 ```
+
+> **📝 Nota**: O deployment agora está neste repositório (`k8s/deployment.yaml`) e usa os recursos padronizados:
+> - Container: `fiap-soat-application`
+> - ConfigMap: `fiap-soat-application-config`
+> - Secret: `fiap-soat-application-secrets`
+> - Service: `fiap-soat-application-service`
+> - Health Checks: Liveness + Readiness probes (`/health`)
+> - HPA: Autoscaling 1-3 replicas (gerenciado pelo repo EKS)
 
 ### 3️⃣ Rodar Migrações
 
@@ -134,7 +143,7 @@ npm run migration:up
 
 ```bash
 # Obter Load Balancer URL
-kubectl get svc -n fiap-soat-app
+kubectl get svc fiap-soat-application-service -n fiap-soat-app
 
 # Testar endpoints
 curl http://<LOAD_BALANCER_URL>/health
@@ -330,8 +339,8 @@ npm run test:cov
 
 ### Aplicação não conecta ao RDS
 ```bash
-# Verificar secret
-kubectl get secret fiap-soat-secrets -n fiap-soat-app -o yaml
+# Verificar secret (nome atualizado)
+kubectl get secret fiap-soat-application-secrets -n fiap-soat-app -o yaml
 
 # Verificar logs
 kubectl logs -f deployment/fiap-soat-application -n fiap-soat-app
@@ -342,8 +351,8 @@ kubectl exec -it deployment/fiap-soat-application -n fiap-soat-app -- nslookup f
 
 ### Load Balancer não responde
 ```bash
-# Verificar status do service
-kubectl describe svc fiap-soat-service -n fiap-soat-app
+# Verificar status do service (nome atualizado)
+kubectl describe svc fiap-soat-application-service -n fiap-soat-app
 
 # Verificar target groups na AWS Console
 aws elbv2 describe-target-health --target-group-arn <ARN>
@@ -357,8 +366,108 @@ aws elbv2 describe-target-health --target-group-arn <ARN>
 #    - DATABASE_HOST
 #    - DATABASE_PASSWORD
 
-# Solução: Verificar secret no Kubernetes
-kubectl edit secret fiap-soat-secrets -n fiap-soat-app
+# Solução: Verificar secret no Kubernetes (nome atualizado)
+kubectl edit secret fiap-soat-application-secrets -n fiap-soat-app
+```
+
+---
+
+## 🔄 CI/CD e Deploy Automatizado
+
+### GitHub Actions Workflow
+
+O repositório possui um workflow CI/CD completo (`.github/workflows/ci-cd-eks.yml`) que:
+
+1. **🧪 Testes** (Pull Requests)
+   - Executa linting
+   - Roda testes unitários
+   - Valida build da aplicação
+
+2. **🐳 Build & Push** (Push para main)
+   - Build da imagem Docker
+   - Tag versionada com SHA do commit
+   - Push para Amazon ECR
+
+3. **🚀 Deploy para EKS** (Após build)
+   - Configura kubectl
+   - Cria deployment se não existir
+   - Atualiza imagem do deployment
+   - Aguarda rollout completar
+   - Verifica health da aplicação
+
+4. **📢 Notificação** (Sempre)
+   - Relatório de sucesso/falha
+   - Informações do deployment
+
+### Separação de Responsabilidades
+
+**Repositório EKS (`fiap-soat-k8s-terraform`)**:
+- ✅ Provisiona cluster EKS via Terraform
+- ✅ Aplica infraestrutura K8s (namespace, configmap, secret, service, HPA)
+
+**Repositório Application (este)**:
+- ✅ Build e push de imagem Docker
+- ✅ Gerencia deployment.yaml
+- ✅ Atualiza aplicação no cluster
+
+### Secrets Necessários
+
+Configure no GitHub (`Settings` > `Secrets and variables` > `Actions`):
+
+| Secret | Descrição |
+|--------|-----------|
+| `AWS_DEFAULT_REGION` | Região AWS (ex: `us-east-1`) |
+| `AWS_ACCESS_KEY_ID` | Access Key da AWS |
+| `AWS_SECRET_ACCESS_KEY` | Secret Key da AWS |
+| `AWS_SESSION_TOKEN` | Session Token (AWS Academy) |
+
+---
+
+## ⚡ Melhorias Implementadas
+
+### ✅ Padronização de Nomenclatura
+
+Todos os recursos Kubernetes agora seguem o padrão `fiap-soat-application-*`:
+
+- Deployment: `fiap-soat-application`
+- Service: `fiap-soat-application-service`
+- ConfigMap: `fiap-soat-application-config`
+- Secret: `fiap-soat-application-secrets`
+- Container: `fiap-soat-application`
+
+### ✅ Health Checks
+
+**Liveness Probe**:
+- Path: `/health`
+- Delay inicial: 30s
+- Período: 10s
+- Timeout: 5s
+- Falhas permitidas: 3
+
+**Readiness Probe**:
+- Path: `/health`
+- Delay inicial: 10s
+- Período: 10s
+- Timeout: 5s
+- Falhas permitidas: 3
+
+### ✅ Horizontal Pod Autoscaler (HPA)
+
+- **Mínimo**: 1 replica
+- **Máximo**: 3 replicas
+- **Métricas**: CPU 70%, Memory 80%
+- **Gerenciado pelo repositório EKS**
+
+### ✅ Recursos Otimizados
+
+```yaml
+resources:
+  requests:
+    memory: "512Mi"
+    cpu: "500m"
+  limits:
+    memory: "512Mi"
+    cpu: "500m"
 ```
 
 ---

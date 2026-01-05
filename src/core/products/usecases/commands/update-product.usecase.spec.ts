@@ -30,12 +30,12 @@ describe('UpdateProductUseCase', () => {
       findById: jest.fn(),
       findByCategory: jest.fn(),
       delete: jest.fn(),
-    } as jest.Mocked<ProductGateway>;
+    } as unknown as jest.Mocked<ProductGateway>;
 
     mockCategoryGateway = {
       findAll: jest.fn(),
       findById: jest.fn(),
-    } as jest.Mocked<CategoryGateway>;
+    } as unknown as jest.Mocked<CategoryGateway>;
   });
 
   describe('execute', () => {
@@ -118,7 +118,7 @@ describe('UpdateProductUseCase', () => {
       };
 
       mockProductGateway.findById.mockResolvedValue(existingProduct);
-      mockCategoryGateway.findById.mockResolvedValue(null);
+      mockCategoryGateway.findById.mockResolvedValue(null as unknown as Category);
 
       // Act & Assert
       await expect(

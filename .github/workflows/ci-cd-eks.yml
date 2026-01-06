@@ -76,6 +76,19 @@ jobs:
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-session-token: ${{ secrets.AWS_SESSION_TOKEN }}
 
+      - name: Ensure ECR repository exists
+        # If repository does not exist, create it. Requires ecr:DescribeRepositories and ecr:CreateRepository permissions
+        run: |
+          echo "🔎 Checking for ECR repository: ${{ env.ECR_REPOSITORY }}"
+          set -e
+          if aws ecr describe-repositories --repository-names "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}" >/dev/null 2>&1; then
+            echo "✅ ECR repository exists"
+          else
+            echo "⚠️ ECR repository not found. Creating..."
+            aws ecr create-repository --repository-name "${{ env.ECR_REPOSITORY }}" --region "${{ env.AWS_REGION }}"
+            echo "✅ Repository created"
+          fi
+
       - name: Login to Amazon ECR
         id: login-ecr
         uses: aws-actions/amazon-ecr-login@v2

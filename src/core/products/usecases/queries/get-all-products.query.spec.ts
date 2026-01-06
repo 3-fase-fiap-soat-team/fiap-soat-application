@@ -38,7 +38,7 @@ describe('GetAllProductsQuery', () => {
       findById: jest.fn(),
       findByCategory: jest.fn(),
       delete: jest.fn(),
-    } as jest.Mocked<ProductGateway>;
+    } as unknown as jest.Mocked<ProductGateway>;
   });
 
   describe('execute', () => {

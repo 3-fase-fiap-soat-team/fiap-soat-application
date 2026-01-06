@@ -41,16 +41,16 @@ describe('CreateProductUseCase', () => {
       findById: jest.fn(),
       findByCategory: jest.fn(),
       delete: jest.fn(),
-    } as jest.Mocked<ProductGateway>;
+    } as unknown as jest.Mocked<ProductGateway>;
 
     mockCategoryGateway = {
       findAll: jest.fn(),
       findById: jest.fn(),
-    } as jest.Mocked<CategoryGateway>;
+    } as unknown as jest.Mocked<CategoryGateway>;
 
     mockProductFactory = {
       create: jest.fn(),
-    } as jest.Mocked<ProductFactory>;
+    } as unknown as jest.Mocked<ProductFactory>;
   });
 
   describe('execute', () => {
@@ -84,7 +84,7 @@ describe('CreateProductUseCase', () => {
 
     it('deve lançar erro quando categoria não existir', async () => {
       // Arrange
-      mockCategoryGateway.findById.mockResolvedValue(null);
+      mockCategoryGateway.findById.mockResolvedValue(null as unknown as Category);
 
       // Act & Assert
       await expect(
